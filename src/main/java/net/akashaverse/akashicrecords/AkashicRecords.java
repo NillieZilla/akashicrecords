@@ -3,6 +3,7 @@ package net.akashaverse.akashicrecords;
 import net.akashaverse.akashicrecords.commands.MineCommands;
 import net.akashaverse.akashicrecords.configs.MineConfig;
 import net.akashaverse.akashicrecords.items.MineItems;
+import net.akashaverse.akashicrecords.items.ModCreativeModeTabs;
 import org.slf4j.Logger;
 
 import com.mojang.logging.LogUtils;
@@ -36,6 +37,7 @@ public class AkashicRecords {
 
         // Register items and other deferred registers
         MineItems.register(modEventBus);
+        ModCreativeModeTabs.register(modEventBus);
 
         // Register commands on the global event bus
         NeoForge.EVENT_BUS.addListener(MineCommands::register);

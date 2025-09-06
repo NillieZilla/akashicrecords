@@ -1,0 +1,6 @@
+{
+  "item.akashicrecords.selection_wand": "Selection Wand",
+  "itemGroup.akashicrecords.mine": "Akashic Records | Mine",
+  "tooltip.akashicrecords.selection_wand.shift": "Right Click 2 blocks diagonally from each\n other then select a Mine Entrance.",
+  "tooltip.akashicrecords.selection_wand.default": "Press §9Shift§r for more Info."
+}

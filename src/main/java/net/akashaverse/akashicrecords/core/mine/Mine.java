@@ -12,6 +12,13 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Represents a single auto‑refilling mine.  A mine is defined by two corners
+ * (min and max positions), a teleportation entrance, a block distribution,
+ * a border block, and timing information.  The {@link #regenerate(ServerLevel)}
+ * method will re‑populate the interior of the region with randomly selected
+ * blocks according to the distribution and rebuild the border.
+ */
 public class Mine {
     /** minimum corner of the cuboid (inclusive) */
     public final BlockPos min;
@@ -29,6 +36,14 @@ public class Mine {
     public final int warningTicks;
     /** block used for the border surrounding the mine */
     public final BlockState borderBlock;
+
+    /**
+     * Whether the border has already been built.  On first generation
+     * (when this is false), the border will be created around the region.
+     * Subsequent regenerations will leave the border in place and only
+     * refill the interior.
+     */
+    public boolean borderBuilt = false;
 
     public Mine(BlockPos pos1, BlockPos pos2, BlockPos entrance, int refillIntervalTicks, int warningTicks,
                 BlockState borderBlock, List<WeightedBlock> distribution) {
@@ -51,6 +66,7 @@ public class Mine {
             this.distribution.addAll(distribution);
         }
         this.nextReset = 0L;
+        this.borderBuilt = false;
     }
 
     /**
@@ -100,23 +116,26 @@ public class Mine {
                 }
             }
         }
-        // Build the border.  We treat the sides and bottom as border, but
-        // deliberately skip the top layer so the mine remains open to the sky.
-        for (int x = min.getX(); x <= max.getX(); x++) {
-            for (int y = min.getY(); y <= max.getY() - 1; y++) { // skip the very top y == max.getY()
-                for (int z = min.getZ(); z <= max.getZ(); z++) {
-                    boolean onBorder = x == min.getX() || x == max.getX()
-                            || y == min.getY()
-                            || z == min.getZ() || z == max.getZ();
-                    if (onBorder) {
-                        level.setBlockAndUpdate(new BlockPos(x, y, z), borderBlock);
+        // Only build the border on the first generation.  After the first
+        // generation, the border remains and we only refill the interior.
+        if (!borderBuilt) {
+            for (int x = min.getX(); x <= max.getX(); x++) {
+                for (int y = min.getY(); y <= max.getY() - 1; y++) { // skip the very top y == max.getY()
+                    for (int z = min.getZ(); z <= max.getZ(); z++) {
+                        boolean onBorder = x == min.getX() || x == max.getX()
+                                || y == min.getY()
+                                || z == min.getZ() || z == max.getZ();
+                        if (onBorder) {
+                            level.setBlockAndUpdate(new BlockPos(x, y, z), borderBlock);
+                        }
                     }
                 }
             }
+            // mark border as built so subsequent regenerations skip this step
+            borderBuilt = true;
         }
-        // Always place the floor at max Y (roof) if borderBlock is not air?  We
-        // intentionally do nothing here; the top layer remains whatever it
-        // previously was.  Schedule the next reset.
+
+        // Schedule the next reset time.
         this.nextReset = level.getGameTime() + refillIntervalTicks;
     }
 }

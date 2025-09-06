@@ -117,7 +117,7 @@ public class MineManager extends SavedData {
      * boundaries, entrance, timing, border block, and distribution list.
      */
     @Override
-    public CompoundTag save(CompoundTag compound, HolderLookup.Provider lookup) {
+    public CompoundTag save(CompoundTag compound, HolderLookup.Provider provider) {
         CompoundTag minesTag = new CompoundTag();
         mines.forEach((name, mine) -> {
             CompoundTag tag = new CompoundTag();
@@ -133,6 +133,8 @@ public class MineManager extends SavedData {
                 list.add(StringTag.valueOf(wb.blockId() + "|" + wb.weight()));
             }
             tag.put("distribution", list);
+            // store whether the border has already been built
+            tag.putBoolean("borderBuilt", mine.borderBuilt);
             minesTag.put(name, tag);
         });
         compound.put("mines", minesTag);
@@ -196,6 +198,10 @@ public class MineManager extends SavedData {
             }).collect(Collectors.toList());
             Mine mine = new Mine(pos1, pos2, entrance, refillInterval, warning, border, distribution);
             mine.nextReset = nextReset;
+            // restore borderBuilt flag if present
+            if (tag.contains("borderBuilt")) {
+                mine.borderBuilt = tag.getBoolean("borderBuilt");
+            }
             manager.mines.put(name, mine);
         }
         return manager;

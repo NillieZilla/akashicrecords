@@ -10,9 +10,12 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.network.chat.Component;
+
+import java.util.List;
 
 /**
  * The selection wand allows players to define a mine region and entrance by
@@ -57,6 +60,17 @@ public class SelectionWandItem extends Item {
         player.sendSystemMessage(Component.literal("Spawn location set at " + posToString(clickedPos) + ". Use /mine create <name> <type> to create the mine."));
         player.getPersistentData().put(TAG_NAME, tag);
         return InteractionResult.SUCCESS;
+    }
+
+    @Override
+    public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag tooltipFlag) {
+        // Show different text depending on whether the Shift key is held.  Translatable
+        // components allow server admins to localise the tooltip in a lang file.
+        if (net.minecraft.client.gui.screens.Screen.hasShiftDown()) {
+            tooltip.add(net.minecraft.network.chat.Component.translatable("tooltip." + AkashicRecords.MOD_ID + ".selection_wand.shift"));
+        } else {
+            tooltip.add(net.minecraft.network.chat.Component.translatable("tooltip." + AkashicRecords.MOD_ID + ".selection_wand.default"));
+        }
     }
 
     @Override

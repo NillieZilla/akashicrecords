@@ -4,7 +4,6 @@ import net.akashaverse.akashicrecords.AkashicRecords;
 import net.akashaverse.akashicrecords.items.custom.SelectionWandItem;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredRegister;
-import net.neoforged.neoforge.registries.DeferredRegister.Items;
 import net.minecraft.world.item.Item;
 
 public class MineItems {

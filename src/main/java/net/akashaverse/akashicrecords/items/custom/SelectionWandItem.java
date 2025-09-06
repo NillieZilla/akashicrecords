@@ -55,9 +55,12 @@ public class SelectionWandItem extends Item {
             player.getPersistentData().put(TAG_NAME, tag);
             return InteractionResult.SUCCESS;
         }
-        // Spawn / entrance selection.  If spawn already exists, update it.
-        tag.putLong("spawn", clickedPos.asLong());
-        player.sendSystemMessage(Component.literal("Spawn location set at " + posToString(clickedPos) + ". Use /mine create <name> <type> to create the mine."));
+        // Spawn / entrance selection.  Store the spawn one block above the clicked
+        // position so players do not spawn inside the block they click.  If spawn
+        // already exists, update it.
+        BlockPos spawnPos = clickedPos.above();
+        tag.putLong("spawn", spawnPos.asLong());
+        player.sendSystemMessage(Component.literal("Spawn location set at " + posToString(spawnPos) + ". Use /mine create <name> <type> to create the mine."));
         player.getPersistentData().put(TAG_NAME, tag);
         return InteractionResult.SUCCESS;
     }

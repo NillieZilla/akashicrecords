@@ -46,9 +46,11 @@ public class MineCommands {
                                                     // If spawn is not set, fall back to player's current position
                                                     BlockPos spawn;
                                                     if (tag.contains("spawn")) {
+                                                        // Use stored spawn but move one block up to avoid placing inside the block
                                                         spawn = BlockPos.of(tag.getLong("spawn"));
                                                     } else {
-                                                        spawn = player.blockPosition();
+                                                        // Default to the player's current position, but spawn one block above
+                                                        spawn = player.blockPosition().above();
                                                     }
                                                     // Retrieve mine type from config
                                                     MineType type = MineConfig.getType(typeName);
@@ -104,7 +106,8 @@ public class MineCommands {
                                                 source.sendFailure(Component.literal("Mine not found: " + name));
                                                 return 0;
                                             }
-                                            mine.entrance = player.blockPosition();
+                                            // Set spawn one block above the player's current position to avoid suffocation
+                                            mine.entrance = player.blockPosition().above();
                                             manager.setDirty();
                                             source.sendSuccess(() -> Component.literal("Set spawn for mine '" + name + "' to your current position."), false);
                                             return 1;

@@ -57,10 +57,14 @@ public class MineConfig {
      * @return a {@link MineType}
      */
     public static MineType getType(String typeName) {
-        if (!loaded) {
-            loadMineTypesFromFiles();
-        }
-        MineType type = FILE_TYPES.get(typeName.toLowerCase(Locale.ROOT));
+        // Always reload the definitions on each call.  This ensures that newly
+        // created .toml files (e.g. when the server is running) are picked up
+        // without requiring a restart.  It may incur a slight I/O cost but
+        // simplifies caching and avoids stale data.
+        loadMineTypesFromFiles();
+        // normalise the type name to lower case to match file names
+        String key = typeName == null ? "" : typeName.toLowerCase(Locale.ROOT);
+        MineType type = FILE_TYPES.get(key);
         if (type != null) {
             return type;
         }
@@ -90,9 +94,9 @@ public class MineConfig {
                 List<String> defaultLines = List.of(
                         "# Default mine type for AutoRefillingMine",
                         "# intervalMinutes and warningSeconds control the timing",
-                        "intervalMinutes = 2",
+                        "intervalMinutes = 30",
                         "warningSeconds = 60",
-                        "blocks = [\"minecraft:stone=70\", \"minecraft:coal_ore=10\", \"minecraft:iron_ore=8\", \"minecraft:copper_ore=5\", \"minecraft:diamond_ore=1\"]"
+                        "blocks = [\"minecraft:stone=70\", \"minecraft:coal_ore=10\", \"minecraft:iron_ore=8\", \"minecraft:copper_ore=5\", \"minecraft:diamond_ore=1\", \"minecraft:air=6\"]"
                 );
                 Files.write(defaultFile, defaultLines);
             }

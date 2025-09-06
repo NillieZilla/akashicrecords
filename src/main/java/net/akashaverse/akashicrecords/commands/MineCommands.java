@@ -5,7 +5,7 @@ import net.akashaverse.akashicrecords.configs.MineConfig;
 import net.akashaverse.akashicrecords.core.mine.Mine;
 import net.akashaverse.akashicrecords.core.mine.MineManager;
 import net.akashaverse.akashicrecords.core.mine.MineType;
-import net.akashaverse.akashicrecords.items.custom.SelectionWandItem;
+import net.akashaverse.akashicrecords.items.mine.SelectionWandItem;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;

@@ -1,7 +1,7 @@
 package net.akashaverse.akashicrecords.items;
 
 import net.akashaverse.akashicrecords.AkashicRecords;
-import net.akashaverse.akashicrecords.items.custom.SelectionWandItem;
+import net.akashaverse.akashicrecords.items.mine.SelectionWandItem;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.minecraft.world.item.Item;

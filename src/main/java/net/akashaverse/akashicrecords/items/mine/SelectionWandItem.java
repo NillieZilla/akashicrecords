@@ -1,4 +1,4 @@
-package net.akashaverse.akashicrecords.items.custom;
+package net.akashaverse.akashicrecords.items.mine;
 
 import net.akashaverse.akashicrecords.AkashicRecords;
 import net.minecraft.core.BlockPos;
@@ -70,9 +70,9 @@ public class SelectionWandItem extends Item {
         // Show different text depending on whether the Shift key is held.  Translatable
         // components allow server admins to localise the tooltip in a lang file.
         if (net.minecraft.client.gui.screens.Screen.hasShiftDown()) {
-            tooltip.add(net.minecraft.network.chat.Component.translatable("tooltip." + AkashicRecords.MOD_ID + ".selection_wand.shift"));
+            tooltip.add(net.minecraft.network.chat.Component.translatable("tooltip." + AkashicRecords.MOD_ID + ".selection_wand"));
         } else {
-            tooltip.add(net.minecraft.network.chat.Component.translatable("tooltip." + AkashicRecords.MOD_ID + ".selection_wand.default"));
+            tooltip.add(net.minecraft.network.chat.Component.translatable("tooltip." + AkashicRecords.MOD_ID + ".shift"));
         }
     }
 

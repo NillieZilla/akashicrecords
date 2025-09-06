@@ -104,11 +104,13 @@ public class Mine {
         SimpleWeightedRandomList<BlockState> weightedList = builder.build();
         RandomSource random = level.random;
 
-        // Fill the interior (excluding border).  We iterate one less than max
-        // on each axis to avoid overwriting the border.  We leave the top
-        // layer (max Y) untouched so players have an open roof.
+        // Fill the interior (excluding border).  We iterate from min+1 to max-1 on
+        // the X/Z axes so we never overwrite the side borders.  On the Y axis we
+        // include the top layer (y == max) so the top plane of the mine is
+        // filled with the weighted content instead of being covered by the
+        // border block.  The roof remains open above the selected region.
         for (int x = min.getX() + 1; x < max.getX(); x++) {
-            for (int y = min.getY() + 1; y < max.getY(); y++) {
+            for (int y = min.getY() + 1; y <= max.getY(); y++) {
                 for (int z = min.getZ() + 1; z < max.getZ(); z++) {
                     BlockPos p = new BlockPos(x, y, z);
                     BlockState state = weightedList.getRandomValue(random).orElse(Blocks.STONE.defaultBlockState());
@@ -120,8 +122,10 @@ public class Mine {
         // generation, the border remains and we only refill the interior.
         if (!borderBuilt) {
             for (int x = min.getX(); x <= max.getX(); x++) {
-                for (int y = min.getY(); y <= max.getY() - 1; y++) { // skip the very top y == max.getY()
+                for (int y = min.getY(); y <= max.getY(); y++) {
                     for (int z = min.getZ(); z <= max.getZ(); z++) {
+                        // Determine if this position is on the outer shell of the mine.
+                        // We treat the sides and bottom as border but leave the top open.
                         boolean onBorder = x == min.getX() || x == max.getX()
                                 || y == min.getY()
                                 || z == min.getZ() || z == max.getZ();

@@ -93,7 +93,13 @@ public class MineManager extends SavedData {
                         );
                     }
                 }
+                // regenerate the mine interior and (if first time) border
                 mine.regenerate(level);
+                // notify all players that the mine has been reset
+                Component resetMsg = Component.literal("Mine '" + entry.getKey() + "' has been reset.");
+                for (ServerPlayer player : level.players()) {
+                    player.sendSystemMessage(resetMsg);
+                }
                 setDirty();
             }
         }

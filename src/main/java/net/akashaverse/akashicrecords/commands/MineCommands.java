@@ -123,7 +123,23 @@ public class MineCommands {
                                     } else {
                                         source.sendSuccess(() -> Component.literal("Mines:"), false);
                                         manager.getMines().forEach((name, mine) -> {
-                                            source.sendSuccess(() -> Component.literal(" - " + name + " from " + posToString(mine.min) + " to " + posToString(mine.max)), false);
+                                            // Build a clickable component to teleport to the mine entrance.  Clicking the
+                                            // link runs a /tp command targeting the caller ("@s").  We colour it aqua
+                                            // for visibility.
+                                            BlockPos ent = mine.entrance;
+                                            String coords = ent.getX() + " " + ent.getY() + " " + ent.getZ();
+                                            var clickEvent = new net.minecraft.network.chat.ClickEvent(
+                                                    net.minecraft.network.chat.ClickEvent.Action.RUN_COMMAND,
+                                                    "/tp @s " + coords
+                                            );
+                                            var teleStyle = net.minecraft.network.chat.Style.EMPTY
+                                                    .withColor(net.minecraft.ChatFormatting.AQUA)
+                                                    .withClickEvent(clickEvent)
+                                                    .withUnderlined(true);
+                                            Component tele = Component.literal("[Teleport]").setStyle(teleStyle);
+                                            Component line = Component.literal(" - " + name + " from " + posToString(mine.min) + " to " + posToString(mine.max) + " ")
+                                                    .append(tele);
+                                            source.sendSuccess(() -> line, false);
                                         });
                                     }
                                     return 1;

@@ -82,15 +82,18 @@ public class MineManager extends SavedData {
                 // teleport players out
                 for (ServerPlayer player : level.players()) {
                     if (mine.contains(player.blockPosition())) {
-                        // teleport to entrance; use centre of block
-                        player.teleportTo(
-                                level,
-                                mine.entrance.getX() + 0.5,
-                                mine.entrance.getY(),
-                                mine.entrance.getZ() + 0.5,
-                                player.getYRot(),
-                                player.getXRot()
-                        );
+                        // teleport to entrance; use centre of block.  Orient the player
+                        // toward the centre of the mine so they face the mine upon arrival.
+                        double destX = mine.entrance.getX() + 0.5;
+                        double destY = mine.entrance.getY();
+                        double destZ = mine.entrance.getZ() + 0.5;
+                        double centerX = (mine.min.getX() + mine.max.getX()) / 2.0 + 0.5;
+                        double centerZ = (mine.min.getZ() + mine.max.getZ()) / 2.0 + 0.5;
+                        double dx = centerX - destX;
+                        double dz = centerZ - destZ;
+                        float yaw = (float) (Math.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0F;
+                        float pitch = 0.0F;
+                        player.teleportTo(level, destX, destY, destZ, yaw, pitch);
                     }
                 }
                 // regenerate the mine interior and (if first time) border

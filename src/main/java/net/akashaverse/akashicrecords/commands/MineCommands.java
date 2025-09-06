@@ -127,10 +127,21 @@ public class MineCommands {
                                             // link runs a /tp command targeting the caller ("@s").  We colour it aqua
                                             // for visibility.
                                             BlockPos ent = mine.entrance;
+                                            // Compute yaw so the teleport command faces the centre of the mine
+                                            double destX = ent.getX() + 0.5;
+                                            double destZ = ent.getZ() + 0.5;
+                                            double centerX = (mine.min.getX() + mine.max.getX()) / 2.0 + 0.5;
+                                            double centerZ = (mine.min.getZ() + mine.max.getZ()) / 2.0 + 0.5;
+                                            double dx = centerX - destX;
+                                            double dz = centerZ - destZ;
+                                            float yaw = (float) (Math.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0F;
+                                            float pitch = 0.0F;
                                             String coords = ent.getX() + " " + ent.getY() + " " + ent.getZ();
+                                            // Append yaw and pitch to the teleport command so the player faces the mine
+                                            String command = "/tp @s " + coords + " " + yaw + " " + pitch;
                                             var clickEvent = new net.minecraft.network.chat.ClickEvent(
                                                     net.minecraft.network.chat.ClickEvent.Action.RUN_COMMAND,
-                                                    "/tp @s " + coords
+                                                    command
                                             );
                                             var teleStyle = net.minecraft.network.chat.Style.EMPTY
                                                     .withColor(net.minecraft.ChatFormatting.AQUA)

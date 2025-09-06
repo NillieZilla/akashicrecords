@@ -1,5 +1,8 @@
 package net.akashaverse.akashicrecords;
 
+import net.akashaverse.akashicrecords.commands.MineCommands;
+import net.akashaverse.akashicrecords.configs.MineConfig;
+import net.akashaverse.akashicrecords.items.MineItems;
 import org.slf4j.Logger;
 
 import com.mojang.logging.LogUtils;
@@ -27,7 +30,15 @@ public class AkashicRecords {
     public AkashicRecords(IEventBus modEventBus, ModContainer modContainer) {
         modEventBus.addListener(this::commonSetup);
 
+        modContainer.registerConfig(ModConfig.Type.SERVER, MineConfig.SPEC);
+
         NeoForge.EVENT_BUS.register(this);
+
+        // Register items and other deferred registers
+        MineItems.register(modEventBus);
+
+        // Register commands on the global event bus
+        NeoForge.EVENT_BUS.addListener(MineCommands::register);
 
         modEventBus.addListener(this::addCreative);
     }

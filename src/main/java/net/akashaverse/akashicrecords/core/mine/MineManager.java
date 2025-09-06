@@ -1,57 +1,44 @@
 package net.akashaverse.akashicrecords.core.mine;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
-import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.network.chat.Component;
-import org.jetbrains.annotations.NotNull;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * Manages all auto‑refilling mines within a level.  Mines are keyed by a
- * simple string name.  The manager is persisted via {@link SavedData}, so
- * mines survive world reloads.  Each tick, {@link #tick(ServerLevel)} must
- * be invoked to handle warnings and regeneration.
- */
 public class MineManager extends SavedData {
     public static final String DATA_NAME = "akashic_mine_manager";
-
     private final Map<String, Mine> mines = new HashMap<>();
 
-    public MineManager() {
-    }
+    public MineManager() {}
 
-    /**
-     * Retrieve the MineManager for the given level.  If none exists, a new one
-     * will be created.  NeoForge automatically handles saving when
-     * {@link SavedData#setDirty()} is called.
-     */
     public static MineManager get(ServerLevel level) {
-        return level.getDataStorage().computeIfAbsent(
-                MineManager::load,
-                MineManager::new,
-                DATA_NAME
-        );
+        // The Factory takes: Supplier<T> constructor, BiFunction<CompoundTag, HolderLookup.Provider, T> loader, DataFixTypes fixers (null if none)
+        SavedData.Factory<MineManager> factory =
+                new SavedData.Factory<>(MineManager::new, MineManager::load, null);
+
+        return level.getDataStorage().computeIfAbsent(factory, DATA_NAME);
     }
 
-    /**
-     * Add a new mine to the manager.  If a mine with the same name exists,
-     * it will be replaced.  Remember to call {@link #setDirty()} after making
-     * changes so the world knows to save the data.
-     */
+    public static MineManager load(CompoundTag tag, HolderLookup.Provider provider) {
+        // delegate to your existing load logic (which only needs the tag)
+        return load(tag);
+    }
+
     public void putMine(String name, Mine mine) {
         mines.put(name, mine);
         setDirty();
@@ -70,25 +57,17 @@ public class MineManager extends SavedData {
         return mines;
     }
 
-    /**
-     * Called each server tick.  Checks each mine’s timers and performs
-     * warnings or regeneration.  Players inside a mine about to regenerate
-     * are teleported to the mine entrance when regeneration occurs.
-     */
     public void tick(ServerLevel level) {
         long gameTime = level.getGameTime();
         for (Map.Entry<String, Mine> entry : mines.entrySet()) {
             Mine mine = entry.getValue();
-            // send warning
             if (mine.nextReset > 0 && gameTime == mine.nextReset - mine.warningTicks) {
                 warnPlayers(level, mine, mine.warningTicks / 20);
             }
-            // regeneration time
             if (mine.nextReset > 0 && gameTime >= mine.nextReset) {
                 // teleport players out
                 for (ServerPlayer player : level.players()) {
                     if (mine.contains(player.blockPosition())) {
-                        // teleport to entrance; use centre of block
                         player.teleportTo(
                                 level,
                                 mine.entrance.getX() + 0.5,
@@ -105,9 +84,6 @@ public class MineManager extends SavedData {
         }
     }
 
-    /**
-     * Send a warning message to all players currently inside the given mine.
-     */
     private void warnPlayers(ServerLevel level, Mine mine, int secondsLeft) {
         Component msg = Component.literal("Mine resetting in " + secondsLeft + " seconds!");
         for (ServerPlayer player : level.players()) {
@@ -117,13 +93,8 @@ public class MineManager extends SavedData {
         }
     }
 
-    /**
-     * Serialise this manager to NBT.  Each mine is stored as a compound tag
-     * keyed by its name.  The data stored for each mine includes the region
-     * boundaries, entrance, timing, border block, and distribution list.
-     */
     @Override
-    public @NotNull CompoundTag save(CompoundTag compound, HolderLookup.@NotNull Provider registries) {
+    public CompoundTag save(CompoundTag compound, HolderLookup.Provider registries) {
         CompoundTag minesTag = new CompoundTag();
         mines.forEach((name, mine) -> {
             CompoundTag tag = new CompoundTag();
@@ -133,9 +104,7 @@ public class MineManager extends SavedData {
             tag.putLong("nextReset", mine.nextReset);
             tag.putInt("refillInterval", mine.refillIntervalTicks);
             tag.putInt("warning", mine.warningTicks);
-            // border block stored as block id string
-            tag.putString("border", net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(mine.borderBlock.getBlock()).toString());
-            // distribution stored as list of strings "id|weight"
+            tag.putString("border", BuiltInRegistries.BLOCK.getKey(mine.borderBlock.getBlock()).toString());
             ListTag list = new ListTag();
             for (WeightedBlock wb : mine.distribution) {
                 list.add(StringTag.valueOf(wb.blockId() + "|" + wb.weight()));
@@ -147,10 +116,6 @@ public class MineManager extends SavedData {
         return compound;
     }
 
-    /**
-     * Deserialise a MineManager from NBT.  This method is passed into the
-     * {@link #get(ServerLevel)} method to load existing data.
-     */
     public static MineManager load(CompoundTag compound) {
         MineManager manager = new MineManager();
         CompoundTag minesTag = compound.getCompound("mines");
@@ -166,20 +131,30 @@ public class MineManager extends SavedData {
             int refillInterval = tag.getInt("refillInterval");
             int warning = tag.getInt("warning");
             String borderId = tag.getString("border");
-            BlockState border = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getOptional(new ResourceLocation(borderId)).orElse(Blocks.BEDROCK).defaultBlockState();
+            BlockState border;
+            try {
+                var key = ResourceLocation.parse(borderId);
+                border = BuiltInRegistries.BLOCK.getOptional(key).orElse(Blocks.BEDROCK).defaultBlockState();
+            } catch (Exception ex) {
+                border = Blocks.BEDROCK.defaultBlockState();
+            }
             ListTag distList = tag.getList("distribution", Tag.TAG_STRING);
-            List<WeightedBlock> distribution = distList.stream().map(Tag::getAsString).map(str -> {
-                String[] parts = str.split("\\|");
-                String id = parts[0];
-                double weight = 1.0;
-                if (parts.length > 1) {
-                    try {
-                        weight = Double.parseDouble(parts[1]);
-                    } catch (NumberFormatException ignored) {
-                    }
-                }
-                return new WeightedBlock(id, weight);
-            }).collect(Collectors.toList());
+            List<WeightedBlock> distribution = distList.stream()
+                    .map(Tag::getAsString)
+                    .map(str -> {
+                        String[] parts = str.split("\\|");
+                        String id = parts.length > 0 ? parts[0] : "minecraft:stone";
+                        double weight = 1.0;
+                        if (parts.length > 1) {
+                            try {
+                                weight = Double.parseDouble(parts[1]);
+                            } catch (NumberFormatException ignored) {
+                                weight = 1.0;
+                            }
+                        }
+                        return new WeightedBlock(id, weight);
+                    })
+                    .collect(Collectors.toList());
             Mine mine = new Mine(pos1, pos2, entrance, refillInterval, warning, border, distribution);
             mine.nextReset = nextReset;
             manager.mines.put(name, mine);

@@ -10,14 +10,18 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.core.registries.BuiltInRegistries;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Represents a single auto‑refilling mine.  A mine is defined by two corners
  * (min and max positions), a teleportation entrance, a block distribution,
- * a border block, and timing information.  The {@link #regenerate(ServerLevel)}
+ * optional layered distributions, and timing information.  The {@link #regenerate(ServerLevel)}
  * method will re‑populate the interior of the region with randomly selected
- * blocks according to the distribution and rebuild the border.
+ * blocks according to either the default distribution or a blended distribution
+ * derived from layers.  The border is built once on the first generation and
+ * then preserved on subsequent regenerations.
  */
 public class Mine {
     /** minimum corner of the cuboid (inclusive) */
@@ -28,6 +32,8 @@ public class Mine {
     public BlockPos entrance;
     /** weighted distribution of blocks inside the mine */
     public final List<WeightedBlock> distribution = new ArrayList<>();
+    /** optional layered distributions used for vertical mixing */
+    public final List<MineLayer> layers;
     /** game time (ticks) when the next reset will occur */
     public long nextReset;
     /** number of ticks between resets */
@@ -36,7 +42,6 @@ public class Mine {
     public final int warningTicks;
     /** block used for the border surrounding the mine */
     public final BlockState borderBlock;
-
     /**
      * Whether the border has already been built.  On first generation
      * (when this is false), the border will be created around the region.
@@ -45,8 +50,20 @@ public class Mine {
      */
     public boolean borderBuilt = false;
 
+    /**
+     * Construct a mine with a single distribution (no layering).
+     */
     public Mine(BlockPos pos1, BlockPos pos2, BlockPos entrance, int refillIntervalTicks, int warningTicks,
                 BlockState borderBlock, List<WeightedBlock> distribution) {
+        this(pos1, pos2, entrance, refillIntervalTicks, warningTicks, borderBlock, distribution, null);
+    }
+
+    /**
+     * Construct a mine that may use layered distributions.  If {@code layers} is null or empty,
+     * the default distribution will be used for all vertical positions.
+     */
+    public Mine(BlockPos pos1, BlockPos pos2, BlockPos entrance, int refillIntervalTicks, int warningTicks,
+                BlockState borderBlock, List<WeightedBlock> distribution, List<MineLayer> layers) {
         // normalise the region so min contains the lowest coordinates and max the highest
         this.min = new BlockPos(
                 Math.min(pos1.getX(), pos2.getX()),
@@ -65,6 +82,7 @@ public class Mine {
         if (distribution != null) {
             this.distribution.addAll(distribution);
         }
+        this.layers = (layers == null || layers.isEmpty()) ? null : List.copyOf(layers);
         this.nextReset = 0L;
         this.borderBuilt = false;
     }
@@ -79,30 +97,55 @@ public class Mine {
     }
 
     /**
-     * Rebuilds the border and fills the interior with randomly selected blocks
-     * according to {@link #distribution}.  After regeneration the next reset
-     * time is scheduled based on {@link #refillIntervalTicks}.  Modded blocks
-     * are supported because we resolve block identifiers via the global block
-     * registry.  If a block id cannot be resolved it falls back to stone.
+     * Rebuilds the border (if not yet built) and fills the interior with randomly selected blocks
+     * according to either the default distribution or a blended layered distribution.  After
+     * regeneration the next reset time is scheduled.
      */
     public void regenerate(ServerLevel level) {
-        // Build a weighted random list of block states.  We multiply the weight by 1000
-        // to convert from double weights to integer weights (required by the builder).
-        SimpleWeightedRandomList.Builder<BlockState> builder = SimpleWeightedRandomList.builder();
-        for (WeightedBlock wb : distribution) {
-            // ResourceLocation constructors are private in 1.21, use parse instead.  This
-            // method throws on invalid ids, so wrap in a try/catch and fall back to stone.
-            Block block;
-            try {
-                var key = net.minecraft.resources.ResourceLocation.parse(wb.blockId());
-                block = BuiltInRegistries.BLOCK.getOptional(key).orElse(Blocks.STONE);
-            } catch (Exception ex) {
-                block = Blocks.STONE;
-            }
-            builder.add(block.defaultBlockState(), (int) Math.max(1, wb.weight() * 1000.0));
-        }
-        SimpleWeightedRandomList<BlockState> weightedList = builder.build();
         RandomSource random = level.random;
+
+        // Precompute a weighted distribution for each Y layer if layered generation is used.
+        Map<Integer, SimpleWeightedRandomList<BlockState>> layerDistributions = null;
+        if (layers != null && !layers.isEmpty()) {
+            layerDistributions = new HashMap<>();
+            int totalHeight = max.getY() - min.getY();
+            int layerCount = layers.size();
+            // Precompute each Y layer's blended distribution
+            for (int y = min.getY() + 1; y <= max.getY(); y++) {
+                // normalised depth (0 at top interior, 1 at bottom interior)
+                double position = (double) (y - (min.getY() + 1)) / Math.max(1.0, (double) (max.getY() - (min.getY() + 1)));
+                double scaled = position * (layerCount - 1);
+                int idx = (int) Math.floor(scaled);
+                double t = scaled - idx;
+                MineLayer layer1 = layers.get(Math.min(idx, layerCount - 1));
+                MineLayer layer2 = layers.get(Math.min(idx + 1, layerCount - 1));
+                // Combine the two layer distributions linearly
+                Map<String, Double> combined = new HashMap<>();
+                // helper to accumulate weights
+                java.util.function.BiConsumer<WeightedBlock, Double> accumulate = (wb, weightFactor) -> {
+                    combined.merge(wb.blockId(), wb.weight() * weightFactor, Double::sum);
+                };
+                for (WeightedBlock wb : layer1.distribution()) {
+                    accumulate.accept(wb, 1.0 - t);
+                }
+                for (WeightedBlock wb : layer2.distribution()) {
+                    accumulate.accept(wb, t);
+                }
+                // Build a weighted random list for this Y
+                SimpleWeightedRandomList.Builder<BlockState> builder = SimpleWeightedRandomList.builder();
+                combined.forEach((id, weight) -> {
+                    Block block;
+                    try {
+                        var key = net.minecraft.resources.ResourceLocation.parse(id);
+                        block = BuiltInRegistries.BLOCK.getOptional(key).orElse(Blocks.STONE);
+                    } catch (Exception ex) {
+                        block = Blocks.STONE;
+                    }
+                    builder.add(block.defaultBlockState(), (int) Math.max(1, weight * 1000.0));
+                });
+                layerDistributions.put(y, builder.build());
+            }
+        }
 
         // Fill the interior (excluding border).  We iterate from min+1 to max-1 on
         // the X/Z axes so we never overwrite the side borders.  On the Y axis we
@@ -113,7 +156,43 @@ public class Mine {
             for (int y = min.getY() + 1; y <= max.getY(); y++) {
                 for (int z = min.getZ() + 1; z < max.getZ(); z++) {
                     BlockPos p = new BlockPos(x, y, z);
-                    BlockState state = weightedList.getRandomValue(random).orElse(Blocks.STONE.defaultBlockState());
+                    // choose distribution: layered or default
+                    SimpleWeightedRandomList<BlockState> weightedList;
+                    if (layerDistributions != null) {
+                        weightedList = layerDistributions.get(y);
+                    } else {
+                        // fallback: build once per regeneration
+                        weightedList = null;
+                    }
+                    BlockState state;
+                    if (weightedList != null) {
+                        state = weightedList.getRandomValue(random).orElse(Blocks.STONE.defaultBlockState());
+                    } else {
+                        // build a simple distribution on demand if no layering
+                        if (distribution.isEmpty()) {
+                            state = Blocks.STONE.defaultBlockState();
+                        } else {
+                            // lazily build a weighted list for default distribution
+                            SimpleWeightedRandomList.Builder<BlockState> builder = SimpleWeightedRandomList.builder();
+                            for (WeightedBlock wb : distribution) {
+                                Block block;
+                                try {
+                                    var key = net.minecraft.resources.ResourceLocation.parse(wb.blockId());
+                                    block = BuiltInRegistries.BLOCK.getOptional(key).orElse(Blocks.STONE);
+                                } catch (Exception ex) {
+                                    block = Blocks.STONE;
+                                }
+                                builder.add(block.defaultBlockState(), (int) Math.max(1, wb.weight() * 1000.0));
+                            }
+                            weightedList = builder.build();
+                            // reuse for subsequent iterations
+                            layerDistributions = new HashMap<>();
+                            for (int yy = min.getY() + 1; yy <= max.getY(); yy++) {
+                                layerDistributions.put(yy, weightedList);
+                            }
+                            state = weightedList.getRandomValue(random).orElse(Blocks.STONE.defaultBlockState());
+                        }
+                    }
                     level.setBlockAndUpdate(p, state);
                 }
             }

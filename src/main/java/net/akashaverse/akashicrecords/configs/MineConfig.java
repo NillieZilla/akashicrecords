@@ -6,6 +6,7 @@ import net.akashaverse.akashicrecords.core.mine.MineType;
 import net.akashaverse.akashicrecords.core.mine.WeightedBlock;
 import net.neoforged.neoforge.common.ModConfigSpec;
 import net.neoforged.fml.loading.FMLPaths;
+import org.jetbrains.annotations.NotNull;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -36,9 +37,6 @@ import java.util.*;
  * Unknown or malformed values are ignored or replaced with sensible defaults.
  */
 public class MineConfig {
-    // An empty config spec – we still register a spec so NeoForge creates a
-    // config directory entry for our mod, but all mine definitions live in
-    // separate files.  Additional global settings could be added here later.
     public static final ModConfigSpec SPEC = new ModConfigSpec.Builder().build();
 
     /**
@@ -82,7 +80,6 @@ public class MineConfig {
             if (!Files.exists(mineDir)) {
                 Files.createDirectories(mineDir);
             }
-            // ensure a default file exists
             Path defaultFile = mineDir.resolve("default.toml");
             if (!Files.exists(defaultFile)) {
                 List<String> defaultLines = List.of(
@@ -94,7 +91,6 @@ public class MineConfig {
                 );
                 Files.write(defaultFile, defaultLines);
             }
-            // iterate over .toml files
             try (var stream = Files.list(mineDir)) {
                 stream.filter(path -> path.toString().endsWith(".toml")).forEach(path -> {
                     String fileName = path.getFileName().toString();
@@ -104,9 +100,7 @@ public class MineConfig {
                         int intervalMinutes = config.getOrElse("intervalMinutes", 30);
                         int warningSeconds = config.getOrElse("warningSeconds", 60);
                         List<WeightedBlock> topDistribution = new ArrayList<>();
-                        // parse top‑level blocks list
                         if (config.contains("blocks")) {
-                            @SuppressWarnings("unchecked")
                             List<String> blocks = config.get("blocks");
                             if (blocks != null) {
                                 for (String entry : blocks) {
@@ -117,7 +111,6 @@ public class MineConfig {
                                         try {
                                             weight = Double.parseDouble(kv[1]);
                                         } catch (NumberFormatException ignored) {
-                                            weight = 1.0;
                                         }
                                     }
                                     topDistribution.add(new WeightedBlock(id, weight));
@@ -125,7 +118,6 @@ public class MineConfig {
                             }
                         }
                         List<MineLayer> layerList = new ArrayList<>();
-                        // parse layered definitions, if present
                         if (config.contains("layers")) {
                             Object layersObj = config.get("layers");
                             if (layersObj instanceof List<?> layersRaw) {
@@ -133,22 +125,7 @@ public class MineConfig {
                                     if (entry instanceof Map<?,?> map) {
                                         Object blockListObj = map.get("blocks");
                                         if (blockListObj instanceof List<?> layerBlocks) {
-                                            List<WeightedBlock> layerWeights = new ArrayList<>();
-                                            for (Object obj : layerBlocks) {
-                                                if (obj instanceof String str) {
-                                                    String[] kv = str.split("=");
-                                                    String id = kv.length > 0 ? kv[0].trim() : "minecraft:stone";
-                                                    double weight = 1.0;
-                                                    if (kv.length > 1) {
-                                                        try {
-                                                            weight = Double.parseDouble(kv[1]);
-                                                        } catch (NumberFormatException ignored) {
-                                                            weight = 1.0;
-                                                        }
-                                                    }
-                                                    layerWeights.add(new WeightedBlock(id, weight));
-                                                }
-                                            }
+                                            List<WeightedBlock> layerWeights = getWeightedBlocks(layerBlocks);
                                             layerList.add(new MineLayer(layerWeights));
                                         }
                                     }
@@ -157,10 +134,6 @@ public class MineConfig {
                         }
                         int intervalTicks = intervalMinutes * 20 * 60;
                         int warningTicks = warningSeconds * 20;
-                        // Construct the type.  If no layers were defined, pass an empty list.  The
-                        // MineType record will treat an empty list as no layering and fall back
-                        // to the default distribution.  Note: we explicitly copy the layer list
-                        // to avoid retaining a mutable list.
                         List<MineLayer> layers = layerList.isEmpty() ? List.of() : List.copyOf(layerList);
                         MineType type = new MineType(typeName, intervalTicks, warningTicks, topDistribution, layers);
                         FILE_TYPES.put(typeName.toLowerCase(Locale.ROOT), type);
@@ -172,6 +145,25 @@ public class MineConfig {
         } catch (Exception e) {
             System.err.println("Error loading mine type configs: " + e.getMessage());
         }
+    }
+
+    private static @NotNull List<WeightedBlock> getWeightedBlocks(List<?> layerBlocks) {
+        List<WeightedBlock> layerWeights = new ArrayList<>();
+        for (Object obj : layerBlocks) {
+            if (obj instanceof String str) {
+                String[] kv = str.split("=");
+                String id = kv.length > 0 ? kv[0].trim() : "minecraft:stone";
+                double weight = 1.0;
+                if (kv.length > 1) {
+                    try {
+                        weight = Double.parseDouble(kv[1]);
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+                layerWeights.add(new WeightedBlock(id, weight));
+            }
+        }
+        return layerWeights;
     }
 
     /**
@@ -187,7 +179,6 @@ public class MineConfig {
         list.add(new WeightedBlock("minecraft:copper_ore", 5.0));
         list.add(new WeightedBlock("minecraft:diamond_ore", 1.0));
         list.add(new WeightedBlock("minecraft:air", 6.0));
-        // No layers defined for the fallback type
         return new MineType("default", 30 * 20 * 60, 60 * 20, list, List.of());
     }
 }

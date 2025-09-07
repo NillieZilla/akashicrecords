@@ -8,18 +8,18 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.minecraft.core.registries.Registries;
 
+import java.util.function.Supplier;
+
 /**
  * Defines the creative mode tab for AutoRefillingMine.  Items registered
  * under this mod will be displayed here.  The tab icon is set to the
  * selection wand.
  */
 public class ModCreativeModeTabs {
-    // Deferred register for creative mode tabs
     public static final DeferredRegister<CreativeModeTab> TABS =
             DeferredRegister.create(Registries.CREATIVE_MODE_TAB, AkashicRecords.MOD_ID);
 
-    // Our single creative tab
-    public static final java.util.function.Supplier<CreativeModeTab> MINE_TAB = TABS.register(
+    public static final Supplier<CreativeModeTab> MINE_TAB = TABS.register(
             "mine_tab",
             () -> CreativeModeTab.builder()
                     .title(Component.translatable("itemGroup." + AkashicRecords.MOD_ID + ".mine"))

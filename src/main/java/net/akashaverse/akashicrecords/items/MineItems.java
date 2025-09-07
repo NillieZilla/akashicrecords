@@ -6,13 +6,13 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import net.minecraft.world.item.Item;
 
+import java.util.function.Supplier;
+
 public class MineItems {
-    // create a specialised deferred register for items
     public static final DeferredRegister.Items ITEMS =
             DeferredRegister.createItems(AkashicRecords.MOD_ID);
 
-    // register your selection wand; registerItem supplies an Item.Properties object separately
-    public static final java.util.function.Supplier<Item> SELECTION_WAND = ITEMS.registerItem(
+    public static final Supplier<Item> SELECTION_WAND = ITEMS.registerItem(
             "selection_wand",
             SelectionWandItem::new,
             new Item.Properties().stacksTo(1)

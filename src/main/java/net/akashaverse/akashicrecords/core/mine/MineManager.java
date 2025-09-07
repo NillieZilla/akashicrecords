@@ -2,16 +2,19 @@ package net.akashaverse.akashicrecords.core.mine;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.network.chat.Component;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
 import java.util.List;
@@ -32,10 +35,6 @@ public class MineManager extends SavedData {
      * {@link SavedData#setDirty()} is called.
      */
     public static MineManager get(ServerLevel level) {
-        // Use the new SavedData.Factory API introduced in NeoForge 1.21.  It
-        // accepts a supplier to create a new manager, a loader that accepts
-        // both NBT and a HolderLookup.Provider, and a DataFixTypes parameter
-        // (null since we have no datafixer).  See load(CompoundTag, HolderLookup.Provider).
         SavedData.Factory<MineManager> factory =
                 new SavedData.Factory<>(MineManager::new, MineManager::load, null);
         return level.getDataStorage().computeIfAbsent(factory, DATA_NAME);
@@ -73,17 +72,12 @@ public class MineManager extends SavedData {
         long gameTime = level.getGameTime();
         for (Map.Entry<String, Mine> entry : mines.entrySet()) {
             Mine mine = entry.getValue();
-            // send warning
             if (mine.nextReset > 0 && gameTime == mine.nextReset - mine.warningTicks) {
                 warnPlayers(level, mine, mine.warningTicks / 20);
             }
-            // regeneration time
             if (mine.nextReset > 0 && gameTime >= mine.nextReset) {
-                // teleport players out
                 for (ServerPlayer player : level.players()) {
                     if (mine.contains(player.blockPosition())) {
-                        // teleport to entrance; use centre of block.  Orient the player
-                        // toward the centre of the mine so they face the mine upon arrival.
                         double destX = mine.entrance.getX() + 0.5;
                         double destY = mine.entrance.getY();
                         double destZ = mine.entrance.getZ() + 0.5;
@@ -96,9 +90,7 @@ public class MineManager extends SavedData {
                         player.teleportTo(level, destX, destY, destZ, yaw, pitch);
                     }
                 }
-                // regenerate the mine interior and (if first time) border
                 mine.regenerate(level);
-                // notify all players that the mine has been reset
                 Component resetMsg = Component.literal("Mine '" + entry.getKey() + "' has been reset.");
                 for (ServerPlayer player : level.players()) {
                     player.sendSystemMessage(resetMsg);
@@ -126,7 +118,7 @@ public class MineManager extends SavedData {
      * boundaries, entrance, timing, border block, and distribution list.
      */
     @Override
-    public CompoundTag save(CompoundTag compound, HolderLookup.Provider provider) {
+    public @NotNull CompoundTag save(CompoundTag compound, HolderLookup.@NotNull Provider provider) {
         CompoundTag minesTag = new CompoundTag();
         mines.forEach((name, mine) -> {
             CompoundTag tag = new CompoundTag();
@@ -136,13 +128,12 @@ public class MineManager extends SavedData {
             tag.putLong("nextReset", mine.nextReset);
             tag.putInt("refillInterval", mine.refillIntervalTicks);
             tag.putInt("warning", mine.warningTicks);
-            tag.putString("border", net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(mine.borderBlock.getBlock()).toString());
+            tag.putString("border", BuiltInRegistries.BLOCK.getKey(mine.borderBlock.getBlock()).toString());
             ListTag list = new ListTag();
             for (WeightedBlock wb : mine.distribution) {
                 list.add(StringTag.valueOf(wb.blockId() + "|" + wb.weight()));
             }
             tag.put("distribution", list);
-            // store whether the border has already been built
             tag.putBoolean("borderBuilt", mine.borderBuilt);
             minesTag.put(name, tag);
         });
@@ -160,7 +151,7 @@ public class MineManager extends SavedData {
      * @param provider registry lookup provider (unused)
      * @return a new MineManager loaded from the given NBT
      */
-    public static MineManager load(CompoundTag compound, net.minecraft.core.HolderLookup.Provider provider) {
+    public static MineManager load(CompoundTag compound, HolderLookup.Provider provider) {
         return load(compound);
     }
 
@@ -186,8 +177,8 @@ public class MineManager extends SavedData {
             String borderId = tag.getString("border");
             BlockState border;
             try {
-                var key = net.minecraft.resources.ResourceLocation.parse(borderId);
-                border = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getOptional(key).orElse(Blocks.BEDROCK).defaultBlockState();
+                var key = ResourceLocation.parse(borderId);
+                border = BuiltInRegistries.BLOCK.getOptional(key).orElse(Blocks.BEDROCK).defaultBlockState();
             } catch (Exception ex) {
                 border = Blocks.BEDROCK.defaultBlockState();
             }
@@ -200,14 +191,12 @@ public class MineManager extends SavedData {
                     try {
                         weight = Double.parseDouble(parts[1]);
                     } catch (NumberFormatException ignored) {
-                        weight = 1.0;
                     }
                 }
                 return new WeightedBlock(id, weight);
             }).collect(Collectors.toList());
             Mine mine = new Mine(pos1, pos2, entrance, refillInterval, warning, border, distribution);
             mine.nextReset = nextReset;
-            // restore borderBuilt flag if present
             if (tag.contains("borderBuilt")) {
                 mine.borderBuilt = tag.getBoolean("borderBuilt");
             }

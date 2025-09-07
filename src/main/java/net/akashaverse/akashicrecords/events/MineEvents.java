@@ -13,9 +13,6 @@ public class MineEvents {
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
         MinecraftServer server = event.getServer();
-        if (server == null) {
-            return;
-        }
         for (ServerLevel level : server.getAllLevels()) {
             MineManager manager = MineManager.get(level);
             manager.tick(level);

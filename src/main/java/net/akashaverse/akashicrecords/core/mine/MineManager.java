@@ -24,27 +24,18 @@ import java.util.stream.Collectors;
 public class MineManager extends SavedData {
     public static final String DATA_NAME = "akashic_mine_manager";
 
+    public static final String TAG_HIDE_MINE_MESSAGES = "ak_hide_mine_messages";
+
     private final Map<String, Mine> mines = new HashMap<>();
 
-    public MineManager() {
-    }
+    public MineManager() {}
 
-    /**
-     * Retrieve the MineManager for the given level.  If none exists, a new one
-     * will be created.  NeoForge automatically handles saving when
-     * {@link SavedData#setDirty()} is called.
-     */
     public static MineManager get(ServerLevel level) {
         SavedData.Factory<MineManager> factory =
                 new SavedData.Factory<>(MineManager::new, MineManager::load, null);
         return level.getDataStorage().computeIfAbsent(factory, DATA_NAME);
     }
 
-    /**
-     * Add a new mine to the manager.  If a mine with the same name exists,
-     * it will be replaced.  Remember to call {@link #setDirty()} after making
-     * changes so the world knows to save the data.
-     */
     public void putMine(String name, Mine mine) {
         mines.put(name, mine);
         setDirty();
@@ -63,21 +54,21 @@ public class MineManager extends SavedData {
         return mines;
     }
 
-    /**
-     * Called each server tick.  Checks each mine’s timers and performs
-     * warnings or regeneration.  Players inside a mine about to regenerate
-     * are teleported to the mine entrance when regeneration occurs.
-     */
     public void tick(ServerLevel level) {
         long gameTime = level.getGameTime();
         for (Map.Entry<String, Mine> entry : mines.entrySet()) {
             Mine mine = entry.getValue();
+
             if (mine.nextReset > 0 && gameTime == mine.nextReset - mine.warningTicks) {
                 warnPlayers(level, mine, mine.warningTicks / 20);
             }
+
             if (mine.nextReset > 0 && gameTime >= mine.nextReset) {
-                for (ServerPlayer player : level.players()) {
-                    if (mine.contains(player.blockPosition())) {
+                java.util.List<ServerPlayer> affected = new java.util.ArrayList<>();
+                for (ServerPlayer p : level.players()) {
+                    if (mine.contains(p.blockPosition())) {
+                        affected.add(p);
+
                         double destX = mine.entrance.getX() + 0.5;
                         double destY = mine.entrance.getY();
                         double destZ = mine.entrance.getZ() + 0.5;
@@ -87,36 +78,34 @@ public class MineManager extends SavedData {
                         double dz = centerZ - destZ;
                         float yaw = (float) (Math.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0F;
                         float pitch = 0.0F;
-                        player.teleportTo(level, destX, destY, destZ, yaw, pitch);
+                        p.teleportTo(level, destX, destY, destZ, yaw, pitch);
                     }
                 }
+
                 mine.regenerate(level);
+
                 Component resetMsg = Component.literal("Mine '" + entry.getKey() + "' has been reset.");
-                for (ServerPlayer player : level.players()) {
-                    player.sendSystemMessage(resetMsg);
+                for (ServerPlayer p : affected) {
+                    if (!p.getPersistentData().getBoolean(TAG_HIDE_MINE_MESSAGES)) {
+                        p.sendSystemMessage(resetMsg);
+                    }
                 }
+
                 setDirty();
             }
         }
     }
 
-    /**
-     * Send a warning message to all players currently inside the given mine.
-     */
     private void warnPlayers(ServerLevel level, Mine mine, int secondsLeft) {
         Component msg = Component.literal("Mine resetting in " + secondsLeft + " seconds!");
-        for (ServerPlayer player : level.players()) {
-            if (mine.contains(player.blockPosition())) {
-                player.sendSystemMessage(msg);
+        for (ServerPlayer p : level.players()) {
+            if (mine.contains(p.blockPosition())
+                    && !p.getPersistentData().getBoolean(TAG_HIDE_MINE_MESSAGES)) {
+                p.sendSystemMessage(msg);
             }
         }
     }
 
-    /**
-     * Serialise this manager to NBT.  Each mine is stored as a compound tag
-     * keyed by its name.  The data stored for each mine includes the region
-     * boundaries, entrance, timing, border block, and distribution list.
-     */
     @Override
     public @NotNull CompoundTag save(CompoundTag compound, HolderLookup.@NotNull Provider provider) {
         CompoundTag minesTag = new CompoundTag();
@@ -141,25 +130,10 @@ public class MineManager extends SavedData {
         return compound;
     }
 
-    /**
-     * Deserialise a MineManager from NBT.  This overload matches the
-     * signature expected by {@link SavedData.Factory}.  We ignore the
-     * {@code provider} parameter because we do not need registry lookups
-     * beyond parsing block IDs.
-     *
-     * @param compound the tag from which to load
-     * @param provider registry lookup provider (unused)
-     * @return a new MineManager loaded from the given NBT
-     */
     public static MineManager load(CompoundTag compound, HolderLookup.Provider provider) {
         return load(compound);
     }
 
-    /**
-     * Legacy loader used internally by the overload that accepts a
-     * {@link net.minecraft.core.HolderLookup.Provider}.  Parses the
-     * mines map from NBT into a new manager.
-     */
     public static MineManager load(CompoundTag compound) {
         MineManager manager = new MineManager();
         CompoundTag minesTag = compound.getCompound("mines");
@@ -188,10 +162,7 @@ public class MineManager extends SavedData {
                 String id = parts.length > 0 ? parts[0] : "minecraft:stone";
                 double weight = 1.0;
                 if (parts.length > 1) {
-                    try {
-                        weight = Double.parseDouble(parts[1]);
-                    } catch (NumberFormatException ignored) {
-                    }
+                    try { weight = Double.parseDouble(parts[1]); } catch (NumberFormatException ignored) {}
                 }
                 return new WeightedBlock(id, weight);
             }).collect(Collectors.toList());

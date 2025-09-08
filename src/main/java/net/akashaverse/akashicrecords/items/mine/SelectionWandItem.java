@@ -1,7 +1,6 @@
 package net.akashaverse.akashicrecords.items.mine;
 
 import net.akashaverse.akashicrecords.AkashicRecords;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
@@ -15,7 +14,6 @@ import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.network.chat.Component;
-import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
@@ -32,7 +30,7 @@ public class SelectionWandItem extends Item {
     }
 
     @Override
-    public @NotNull InteractionResult useOn(UseOnContext context) {
+    public InteractionResult useOn(UseOnContext context) {
         Level level = context.getLevel();
         if (level.isClientSide) {
             return InteractionResult.SUCCESS;
@@ -43,18 +41,23 @@ public class SelectionWandItem extends Item {
         CompoundTag tag = player.getPersistentData().getCompound(TAG_NAME);
         BlockPos clickedPos = context.getClickedPos();
 
+        // First corner selection
         if (!tag.contains("pos1")) {
             tag.putLong("pos1", clickedPos.asLong());
             player.sendSystemMessage(Component.literal("First corner set at " + posToString(clickedPos)));
             player.getPersistentData().put(TAG_NAME, tag);
             return InteractionResult.SUCCESS;
         }
+        // Second corner selection
         if (!tag.contains("pos2")) {
             tag.putLong("pos2", clickedPos.asLong());
             player.sendSystemMessage(Component.literal("Second corner set at " + posToString(clickedPos)));
             player.getPersistentData().put(TAG_NAME, tag);
             return InteractionResult.SUCCESS;
         }
+        // Spawn / entrance selection.  Store the spawn one block above the clicked
+        // position so players do not spawn inside the block they click.  If spawn
+        // already exists, update it.
         BlockPos spawnPos = clickedPos.above();
         tag.putLong("spawn", spawnPos.asLong());
         player.sendSystemMessage(Component.literal("Spawn location set at " + posToString(spawnPos) + ". Use /mine create <name> <type> to create the mine."));
@@ -63,16 +66,19 @@ public class SelectionWandItem extends Item {
     }
 
     @Override
-    public void appendHoverText(@NotNull ItemStack stack, @NotNull TooltipContext context, @NotNull List<Component> tooltip, @NotNull TooltipFlag tooltipFlag) {
-        if (Screen.hasShiftDown()) {
-            tooltip.add(Component.translatable("tooltip." + AkashicRecords.MOD_ID + ".selection_wand"));
+    public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> tooltip, TooltipFlag tooltipFlag) {
+        // Show different text depending on whether the Shift key is held.  Translatable
+        // components allow server admins to localise the tooltip in a lang file.
+        if (net.minecraft.client.gui.screens.Screen.hasShiftDown()) {
+            tooltip.add(net.minecraft.network.chat.Component.translatable("tooltip." + AkashicRecords.MOD_ID + ".selection_wand"));
         } else {
-            tooltip.add(Component.translatable("tooltip." + AkashicRecords.MOD_ID + ".shift"));
+            tooltip.add(net.minecraft.network.chat.Component.translatable("tooltip." + AkashicRecords.MOD_ID + ".shift"));
         }
     }
 
     @Override
-    public @NotNull InteractionResultHolder<ItemStack> use(@NotNull Level level, @NotNull Player player, @NotNull InteractionHand hand) {
+    public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
+        // Right clicking in air does nothing; we rely on useOn to set entrance.
         return super.use(level, player, hand);
     }
 
@@ -80,4 +86,10 @@ public class SelectionWandItem extends Item {
         return pos.getX() + "," + pos.getY() + "," + pos.getZ();
     }
 
+    /*
+     * The selection wand no longer parses a default distribution or creates
+     * mines directly.  Instead, it stores the selected positions in the
+     * player's persistent data.  The /mine create command will read these
+     * positions and construct a mine of the specified type.
+     */
 }

@@ -17,6 +17,7 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
 
@@ -24,22 +25,24 @@ import net.neoforged.neoforge.event.server.ServerStartingEvent;
 public class AkashicRecords {
 
     public static final String MOD_ID = "akashicrecords";
-    public static final String MOD_VERSION = "0.0.1";
-    public static final String NEOFORGE_VERSION = "21.1.172";
-    public static final String MINECRAFT_VERSION = "1.21.1";
+
     public static final Logger LOGGER = LogUtils.getLogger();
 
-    public AkashicRecords(IEventBus eventBus, ModContainer container) {
+    public AkashicRecords(IEventBus modEventBus, ModContainer modContainer) {
+        modEventBus.addListener(this::commonSetup);
 
-        container.registerConfig(ModConfig.Type.SERVER, MineConfig.SPEC);
+        modContainer.registerConfig(ModConfig.Type.SERVER, MineConfig.SPEC);
 
-        eventBus.register(this);
-        eventBus.addListener(this::commonSetup);
-        eventBus.addListener(this::addCreative);
-        eventBus.addListener(ModCreativeModeTabs::register);
-        eventBus.addListener(MineItems::register);
-        eventBus.addListener(MineCommands::register);
+        NeoForge.EVENT_BUS.register(this);
 
+        // Register items and other deferred registers
+        MineItems.register(modEventBus);
+        ModCreativeModeTabs.register(modEventBus);
+
+        // Register commands on the global event bus
+        NeoForge.EVENT_BUS.addListener(MineCommands::register);
+
+        modEventBus.addListener(this::addCreative);
     }
 
     private void commonSetup(FMLCommonSetupEvent event) {
@@ -57,12 +60,9 @@ public class AkashicRecords {
 
     @EventBusSubscriber(modid = AkashicRecords.MOD_ID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
     static class ClientModEvents {
-
         @SubscribeEvent
         static void onClientSetup(FMLClientSetupEvent event) {
 
         }
-
     }
-
 }
